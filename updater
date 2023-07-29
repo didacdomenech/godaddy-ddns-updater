@@ -1,0 +1,37 @@
+#!/bin/bash
+
+PUBLIC_IP=$(curl -s 'ifconfig.me')
+current_date=$(date '+[%d-%m-%Y/%H:%M:%S CEST]')
+
+echo "${current_date}: updating dynamic name resolution IPs."
+
+while getopts k:s:d:h: flag
+do
+  case "${flag}" in
+    k) key=${OPTARG};;
+    s) secret=${OPTARG};;
+    d) domain=${OPTARG};;
+    h) host=${OPTARG};;
+  esac
+done
+
+get=$(
+  curl -s -X GET \
+    -H "Authorization: sso-key ${key}:${secret}" \
+    "https://api.godaddy.com/v1/domains/${domain}/records/A/${host}" \
+    | cut -d'[' -f 2 | cut -d']' -f 1 | jq -r '.data'
+)
+
+if [ "$PUBLIC_IP" != "$get" -a "$PUBLIC_IP" != "" ]; then
+  response=$(
+    curl -o /dev/null -s -w "%{http_code}" -X PUT \
+    -H "Authorization: sso-key ${key}:${secret}" \
+    -H "Content-Type: application/json" -d "[{\"data\": \"${PUBLIC_IP}\"}]" \
+    "https://api.godaddy.com/v1/domains/${domain}/records/A/${host}"
+  )
+  if [ "$response" == "200" ]; then
+    echo "${current_date}: The ip address got updated successfuly to [${PUBLIC_IP}] for [${host}.${domain}]"
+  fi
+else
+  echo "${current_date}: the ip has not changed, omiting..."
+fi
